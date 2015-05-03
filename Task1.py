@@ -7,7 +7,10 @@ import sys
 import getopt
 
 def get_img():
-#Get the input file from user
+#   Get the input file from user
+#   input : None
+#   output: output (PIL image file)
+#           filename (File name : string)
     while True:
         filename = raw_input('Input filename of the image : ')
         try:
@@ -19,6 +22,11 @@ def get_img():
     return (output, filename)
 
 def plot_graph(a_v, b_v, L):
+#   Plot the quantization graph
+#   input : a_v (quantization interval)
+#           b_v (quantization result)
+#           L (quantization level : integer)
+#   output: None
     for i in range(0, L+1):
         a_v[i] = i * (256/L)
     plt.step(a_v[1:L+1], b_v.astype(np.int16))
@@ -28,6 +36,12 @@ def plot_graph(a_v, b_v, L):
     plt.show()
 
 def mse(a_v, b_v, p_x, L):
+#   Mean squared quantization error function
+#   input : a_v (quantization interval)
+#           b_v (quantization result)
+#           p_x (probability density function)
+#           L (quantization level : integer)
+#   output: err (error : float)
     err_el = 0
     for v in range(L):
         x = np.linspace(a_v[v], a_v[v+1], int(a_v[v+1])-int(a_v[v])).astype(dtype='int16')
@@ -42,7 +56,14 @@ def mse(a_v, b_v, p_x, L):
     return err
 
 def calculate_lloyd_max(a_v, b_v, img, L, iteration):
-    # initialize
+#   Perform Lloyd-Max algorithm
+#   input : a_v (quantization interval)
+#           b_v (quantization result)
+#           img (PIL image file)
+#           L (quantization level : integer)
+#           iteration (number of iteration : integer)
+#   output: b_v (quantization result)
+#           it_count (iteration until minimum error : integer)
     a = np.asarray(img)
     hx = img.histogram()
     hx = np.array(hx).astype(dtype='f')
@@ -55,18 +76,16 @@ def calculate_lloyd_max(a_v, b_v, img, L, iteration):
     b_v = np.zeros(L)
     for i in range(0, L):
         b_v[i] = i * (256/L) + (256/(2*L))
-    # print a_v
-    # print b_v
 
     # Error calculation
     err_prev = mse(a_v, b_v, p_x, L)
     it_count = 1
-    # while True:
+    
+    # Iteration
     for j in range(0, iteration+1):
         err = 0
         for v in range(1, L):
             a_v[v] = 0.5*(b_v[v] + b_v[v-1])
-        # print a_v
 
         for v in range(0, L):
             num = 0.0
@@ -77,9 +96,7 @@ def calculate_lloyd_max(a_v, b_v, img, L, iteration):
             if denum == 0:
                 denum = 0.0001
             b_v[v] = num/denum
-        # print b_v
 
-        mse(a_v, b_v, p_x, L)
         # Error calculation
         err = mse(a_v, b_v, p_x, L)
         it_count+=1
@@ -104,8 +121,9 @@ def calculate_lloyd_max(a_v, b_v, img, L, iteration):
 #     image = Image.fromarray(np.uint8(img_array))
 #     image.show()
 
-#Defining the Main Function
+
 def main(argv):
+#   Main function
     helpstr = """Task1.py -l <QuantizationLevel> -i <NumberOfIteration>"""
     # parse command line
     iteration = None
@@ -131,13 +149,12 @@ def main(argv):
         print helpstr
         sys.exit(2)
 
-    # iteration = 2
-    # q_level = 8
     img, filename = get_img()
     filename_split = filename.split(".")
 
     a_v = np.zeros(q_level+1)
     b_v = np.zeros(q_level)
+
     quantization_value, it_count = calculate_lloyd_max(a_v, b_v, img, q_level, iteration)
     print "Quantization value\t:\t" + str(quantization_value)
     print "Iteration\t\t:\t" + str(it_count)
