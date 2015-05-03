@@ -109,7 +109,6 @@ def calculate_lloyd_max(a_v, b_v, img, L, iteration):
                 denum = 0.0001
             b_v[v] = num/denum
 
-        mse(a_v, b_v, p_x, L)
         # Error calculation
         err = mse(a_v, b_v, p_x, L)
         it_count += 1
