@@ -27,6 +27,24 @@ int image_height = 19;
 char filename[20];
 Mat row_mean;
 
+static Mat norm_0_255(InputArray _src) {
+    Mat src = _src.getMat();
+    // Create and return normalized image:
+    Mat dst;
+    switch(src.channels()) {
+        case 1:
+            cv::normalize(_src, dst, 0, 255, NORM_MINMAX, CV_8UC1);
+            break;
+        case 3:
+            cv::normalize(_src, dst, 0, 255, NORM_MINMAX, CV_8UC3);
+            break;
+        default:
+            src.copyTo(dst);
+            break;
+    }
+    return dst;
+}
+
 int readDir(void){ // initialization
     DIR *dir;
     struct dirent *ent;
@@ -163,18 +181,18 @@ void process_training_images(void){
     cv::sort(eValuesMat, eValuesMat, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the eigenvalue
     cout << "indices " << indice.t() << endl;
     
-    // plot spectrum of eigen values
-    double idx[indice.rows*indice.cols];
-    double y[indice.rows*indice.cols];
-    cout << indice.rows << " " <<indice.cols <<endl;
-    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
-    for (int i = 0; i < indice.rows; i++) {
-        for (int j = 0; j < indice.cols; j++) {
-            idx[i*indice.cols+j] = indice.at<int>(j,i);
-            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
-        }
-    }
-    plotxy(idx, y, indice.rows*indice.cols);
+//    // plot spectrum of eigen values
+//    double idx[indice.rows*indice.cols];
+//    double y[indice.rows*indice.cols];
+//    cout << indice.rows << " " <<indice.cols <<endl;
+//    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
+//    for (int i = 0; i < indice.rows; i++) {
+//        for (int j = 0; j < indice.cols; j++) {
+//            idx[i*indice.cols+j] = indice.at<int>(j,i);
+//            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
+//        }
+//    }
+//    plotxy(idx, y, indice.rows*indice.cols);
     
     // determine the smallest eigen values
     double sum = cv::sum(eValuesMat)[0];
@@ -196,29 +214,23 @@ void process_training_images(void){
     // visualize eigen vectors
     vector<Mat> imeigenvector;
     for (int i = 0; i < index; i++) {
-        Mat temp_img = Mat::zeros(image_height,image_width,CV_32S);
-        
-        for (int yi = 0; yi < image_height; yi++) {
-            for (int xi = 0; xi < image_width; xi++) {
-                int index_int = (int)indice.at<int>(0,i);
-                temp_img.at<int>(xi,yi) = eVectorsMat.at<int>(yi*image_width+xi, index_int);
-            }
-        }
+        Mat ev = eVectorsMat.row(i).clone();
+        Mat temp_img = norm_0_255(ev.reshape(1, image_height));
+        temp_img = temp_img.t();
         imeigenvector.push_back(temp_img);
     }
     
     Mat images;
     int rows_im = (int)sqrt(imeigenvector.size());
-    Mat H = Mat::zeros(image_height, image_width, CV_32S);
-    Mat V = Mat::zeros(image_height, image_width*(rows_im+1), CV_32S);
+    Mat H = Mat::zeros(image_height, image_width, CV_8U);
+    Mat V = Mat::zeros(image_height, image_width*(rows_im+1), CV_8U);
     
-
     for (int i = 0; i < rows_im; i++) {
         for (int j = 0; j < rows_im; j++) {
             hconcat(imeigenvector.at(i*rows_im+j), H, H);
         }
         vconcat(H, V, V);
-        H = Mat::zeros(image_height, image_width, CV_32S);
+        H = Mat::zeros(image_height, image_width, CV_8U);
     }
     namedWindow( "Eigen vectors", WINDOW_NORMAL );
     imshow("Eigen vectors", V);
@@ -302,6 +314,6 @@ int main( int argc, char** argv ) {
     readDir();
     classify_images();
     process_training_images();
-    process_test_images();
+//    process_test_images();
     return 0;
 }
