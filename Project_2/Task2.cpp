@@ -12,7 +12,6 @@
 #include <random>
 #include <fstream>
 
-
 using namespace std;
 using namespace cv;
 
@@ -20,10 +19,13 @@ vector<int> ninety;
 vector<int> ten;
 vector<string> name_files;
 int num_files;
-Mat_<int> Xtrain;
+Mat Xtrain;
+Mat Xtest;
+vector<Mat_<double>> Xtrain_covar;
 int image_width = 19;
 int image_height = 19;
 char filename[20];
+Mat row_mean;
 
 int readDir(void){ // initialization
     DIR *dir;
@@ -63,7 +65,7 @@ void classify_images(void){
     }
     
     // get 90% of files
-    uniform_int_distribution<> distribution(0, num_files-1);     // generate uniform distribution
+    uniform_int_distribution<> distribution(1, num_files-1);     // generate uniform distribution
     for (int i = 0; i < ninety_percent; i++) {
         int random = distribution(gen);
         while (temp.at(random)==-1) {
@@ -79,44 +81,177 @@ void classify_images(void){
             ten.push_back(temp.at(i));
         }
     }
-
-    for (int i = 0; i < num_files; i++) {
-        printf("%d\n", temp.at(i));
-    }
-    
-    
 }
 
-void read_images(){
-// read images and save to the matrix as one array
-    Xtrain = Mat_<int>::zeros((int)ninety.size(),(image_width*image_height));
-    string line;
+void plotxy(double* xData, double* yData, int dataSize) {
+    FILE *gnuplotPipe,*tempDataFile;
+    char *tempDataFileName;
+    double x,y;
+    int i;
+    tempDataFileName = "plot";
+    gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
+    if (gnuplotPipe) {
+        fprintf(gnuplotPipe,"set title \"Eigen values\"\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
+        fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
+        fflush(gnuplotPipe);
+        tempDataFile = fopen(tempDataFileName,"w");
+        for (i=0; i <= dataSize; i++) {
+            x = xData[i];
+            y = yData[i];
+            fprintf(tempDataFile,"%lf %lf\n",x,y);
+        }
+        fclose(tempDataFile);
+        printf("press enter to continue...");
+        getchar();
+        remove(tempDataFileName);
+        fprintf(gnuplotPipe,"exit \n");
+    } else {
+        printf("gnuplot not found...");
+    }
+}
 
+
+void process_training_images(void){
+    // read images and save to the matrix as one array
+    Xtrain = Mat::zeros((int)ninety.size(),(image_width*image_height),CV_8U);
+    string line;
+    int column;
+    Mat image_temp;
+    Mat_<int> linear_mat = Mat_<int>::zeros(1, image_width*image_height);
     
     for (int i = 0; i < (int)ninety.size(); i++) {
         sprintf(filename, "train/face%05d.pgm",ninety[i]);
-        Mat image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
-//        imshow("",image_temp);
-        cout << "ninty " << ninety.size() << endl;
-//        cout << "xtrain " << Xtrain.rows << " " << Xtrain.cols << endl;
-//        cout << "im " << image_temp.rows << " " << image_temp.cols << endl;
-        for (int j = 0; j < image_height; j++) {
-            for (int k = 0; k < image_width; k++){
-                cout << i << " " << j*image_width+k << endl;
-                Xtrain[i][j*image_width+k] = image_temp.at<int>(j,k);
+        image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+
+        for (int k = 0; k < image_height; k++) {
+            for (int j = 0; j < image_width; j++){
+                column = (int)(j+image_height*k);
+                Xtrain.at<uint8_t>(i,column) = image_temp.at<uint8_t>(j,k);
             }
         }
     }
     
+    // get mean matrix
+    row_mean = Mat::zeros(1, image_width*image_height, CV_8U);
+    reduce(Xtrain, row_mean, 0, CV_REDUCE_AVG, CV_8U);
+
+    // obtain zero mean data
+    Mat tempMat;
+    Mat Xtraincenter;
+    
+    for (int i = 0; i<Xtrain.rows; i++)
+    {
+        tempMat = (Xtrain.row(i) - row_mean.row(0));
+        Xtraincenter.push_back(tempMat.row(0));
+    }
+    
+    //compute Covariance matrix, eigenvalue and eigen factors
+    Mat eValuesMat;
+    Mat eVectorsMat;
+    Xtrain.convertTo(Xtrain, CV_64F);
+    Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
+    
+    eigen(C, eValuesMat, eVectorsMat);
+    cout << eValuesMat.t() << endl;
+
+    //sort the eigen values in descending order
+    Mat indice;
+    Mat sortedeValues;
+    cv::sortIdx(eValuesMat, indice, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//get the sorted value indices
+    cv::sort(eValuesMat, eValuesMat, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the eigenvalue
+    cout << "indices " << indice.t() << endl;
+    
+    double sum = cv::sum(eValuesMat)[0];
+    cout << "sum " << sum << endl;
+    double temp = 0;
+    int index = 0;
+    for (int i= 0; i < 361; i++){
+        temp = temp + eValuesMat.at<double>(i,0);
+        cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
+        if (temp >= 0.99*sum)  break;
+        //Here I got a super big eigen value on the first place so it break in the first round
+        //so I changed it from 0.9 to 0.99
+        else index++;
+    }
+    
+    cout << "index = " << index << endl;
+    
+    // visualize eigen vectors
+    vector<Mat> imeigenvector;
+    for (int i = 0; i < index; i++) {
+        Mat temp_img = Mat::zeros(image_height,image_width,CV_32S);
+        
+        for (int yi = 0; yi < image_height; yi++) {
+            for (int xi = 0; xi < image_width; xi++) {
+                int index_int = (int)indice.at<int>(0,i);
+                temp_img.at<int>(xi,yi) = eVectorsMat.at<int>(yi*image_width+xi, index_int);
+            }
+        }
+        imeigenvector.push_back(temp_img);
+    }
+    
+    for (int i = 0; i < imeigenvector.size(); i++) {
+         namedWindow( "i", WINDOW_NORMAL );
+        imshow("i", imeigenvector.at(i));
+        waitKey();
+    }
+    
+    // plot eigen values
+    double idx[indice.rows*indice.cols];
+    double y[indice.rows*indice.cols];
+    cout << indice.rows << " " <<indice.cols <<endl;
+    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
+    for (int i = 0; i < indice.rows; i++) {
+        for (int j = 0; j < indice.cols; j++) {
+            idx[i*indice.cols+j] = indice.at<int>(j,i);
+            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
+        }
+    }
+    plotxy(idx, y, indice.rows*indice.cols);
+}
+
+void process_test_images(void){
+    Xtrain = Mat::zeros((int)ten.size(),(image_width*image_height),CV_8U);
+    string line;
+    int column;
+    Mat image_temp;
+    Mat_<int> linear_mat = Mat_<int>::zeros(1, image_width*image_height);
+    
+    for (int i = 0; i < (int)ten.size(); i++) {
+        sprintf(filename, "train/face%05d.pgm",ten[i]);
+        image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+        
+        for (int k = 0; k < image_height; k++) {
+            for (int j = 0; j < image_width; j++){
+                column = (int)(j+image_height*k);
+                Xtest.at<uint8_t>(i,column) = image_temp.at<uint8_t>(j,k);
+            }
+        }
+    }
+
+    // obtain zero mean data
+    Mat tempMat;
+    Mat Xtestcenter;
+    
+    for (int i = 0; i<Xtest.rows; i++)
+    {
+        tempMat = (Xtest.row(i) - row_mean.row(0));
+        Xtestcenter.push_back(tempMat.row(0));
+    }
+    
+    //compute Covariance matrix, eigenvalue and eigen factors
+    Mat eValuesMat;
+    Mat eVectorsMat;
+    Xtrain.convertTo(Xtrain, CV_64F);
+    Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
 }
 
 int main( int argc, char** argv ) {
     
     readDir();
     classify_images();
-    read_images();
-    // Now read training images
-    // Just need to open files with name stored in vector filename and index stored in vector ninety
-    
+    process_training_images();
+    process_test_images();
     return 0;
 }
