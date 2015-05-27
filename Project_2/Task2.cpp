@@ -21,7 +21,7 @@ vector<string> name_files;
 int num_files;
 Mat Xtrain;
 Mat Xtest;
-vector<Mat_<double>> Xtrain_covar;
+
 int image_width = 19;
 int image_height = 19;
 char filename[20];
@@ -52,7 +52,7 @@ int readDir(void){ // initialization
 
 void classify_images(void){
 // classify the index of data, classified indices are stored in ninety and ten vector of int
-    random_device rd;       // ranom device
+    random_device rd;       // random device
     mt19937 gen(rd());      // random generator
     
     vector<int> temp;
@@ -60,12 +60,14 @@ void classify_images(void){
     int ninety_percent = (int)(ceil(0.9 * num_files));  // 90% number of files
     int ten_percent = (int)(0.1 * num_files);           // 10% number of files
     
-    for (int i = 0; i < num_files; i++) {               // initialize working array
+    for (int i = 0; i < num_files+1; i++) {               // initialize working array
         temp.push_back(i);
     }
     
     // get 90% of files
-    uniform_int_distribution<> distribution(1, num_files-1);     // generate uniform distribution
+    uniform_int_distribution<> distribution(1, num_files);     // generate uniform distribution
+    
+    temp.at(0) = -1;
     for (int i = 0; i < ninety_percent; i++) {
         int random = distribution(gen);
         while (temp.at(random)==-1) {
@@ -118,7 +120,6 @@ void process_training_images(void){
     string line;
     int column;
     Mat image_temp;
-    Mat_<int> linear_mat = Mat_<int>::zeros(1, image_width*image_height);
     
     for (int i = 0; i < (int)ninety.size(); i++) {
         sprintf(filename, "train/face%05d.pgm",ninety[i]);
@@ -126,7 +127,7 @@ void process_training_images(void){
 
         for (int k = 0; k < image_height; k++) {
             for (int j = 0; j < image_width; j++){
-                column = (int)(j+image_height*k);
+                column = (int)(j+image_width*k);
                 Xtrain.at<uint8_t>(i,column) = image_temp.at<uint8_t>(j,k);
             }
         }
@@ -149,8 +150,8 @@ void process_training_images(void){
     //compute Covariance matrix, eigenvalue and eigen factors
     Mat eValuesMat;
     Mat eVectorsMat;
-    Xtraincenter.convertTo(Xtraincenter, CV_64F);
-    Mat C = Xtraincenter.t() * Xtraincenter / 1000;// (int)ninety.size();
+    Xtraincenter.convertTo(Xtrain, CV_64F);
+    Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
     
     eigen(C, eValuesMat, eVectorsMat);
     cout << eValuesMat.t() << endl;
@@ -227,25 +228,37 @@ void process_training_images(void){
 }
 
 void process_test_images(void){
-    Xtrain = Mat::zeros((int)ten.size(),(image_width*image_height),CV_8U);
+    random_device rd;       // ranom device
+    mt19937 gen(rd());      // random generator
+    int num_test_files = 10;
+    vector<int> test_images_idx;
+    
+    int ten_percent = (int)(0.1 * num_files);           // 10% number of files
+    
+    uniform_int_distribution<> distribution(1,ten_percent);     // generate uniform distribution
+    for (int i = 0; i < num_test_files; i++) {
+        int random = distribution(gen);
+        test_images_idx.push_back(random);
+    }
+    
+    Xtest = Mat::zeros((int)ten.size(),(image_width*image_height),CV_8U);
     string line;
     int column;
     Mat image_temp;
-    Mat_<int> linear_mat = Mat_<int>::zeros(1, image_width*image_height);
-    
+
     for (int i = 0; i < (int)ten.size(); i++) {
         sprintf(filename, "train/face%05d.pgm",ten[i]);
         image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
-        
+//        cout << "i " << i << endl;
         for (int k = 0; k < image_height; k++) {
             for (int j = 0; j < image_width; j++){
-                column = (int)(j+image_height*k);
+                column = (int)(j+image_width*k);
                 Xtest.at<uint8_t>(i,column) = image_temp.at<uint8_t>(j,k);
             }
         }
     }
 
-    // obtain zero mean data
+    // center test data
     Mat tempMat;
     Mat Xtestcenter;
     
@@ -255,11 +268,33 @@ void process_test_images(void){
         Xtestcenter.push_back(tempMat.row(0));
     }
     
-    //compute Covariance matrix, eigenvalue and eigen factors
-    Mat eValuesMat;
-    Mat eVectorsMat;
-    Xtrain.convertTo(Xtrain, CV_64F);
-    Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
+    // get 10 test images
+    Mat test_images;
+    for (int i = 0; i < num_test_files; i++) {
+        test_images.push_back(Xtestcenter.row(test_images_idx.at(i)));
+    }
+//    cout << "test images " << Xtrain.rows << " " << Xtrain.cols << endl;
+    vector<Mat> distance_test_images;
+    
+    Xtrain.convertTo(Xtrain, CV_8U);
+    for (int i = 0; i < num_test_files; i++) {
+        Mat temp;
+        Mat mattemp;
+        for (int j = 0; j < Xtrain.rows; j++) {
+            temp = (test_images.row(i) - Xtrain.row(j));
+            mattemp.push_back(temp.row(0));
+        }
+        distance_test_images.push_back(temp);
+    }
+    
+    // sort distance
+    Mat sorted_dist;
+    for (int i = 0; i < num_test_files; i++) {
+        cv::sort(distance_test_images.at(i), sorted_dist, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the distance
+        distance_test_images.at(i) = sorted_dist;
+
+    }
+    
 }
 
 int main( int argc, char** argv ) {
@@ -267,6 +302,6 @@ int main( int argc, char** argv ) {
     readDir();
     classify_images();
     process_training_images();
-//    process_test_images();
+    process_test_images();
     return 0;
 }
