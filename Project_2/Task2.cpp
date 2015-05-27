@@ -26,6 +26,8 @@ int image_width = 19;
 int image_height = 19;
 char filename[20];
 Mat row_mean;
+Mat eValuesMat;
+Mat eVectorsMat;
 
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
@@ -103,16 +105,16 @@ void classify_images(void){
     }
 }
 
-void plotxy(double* xData, double* yData, int dataSize) {
+void ploteigenvalues(double* xData, double* yData, int dataSize) {
     FILE *gnuplotPipe,*tempDataFile;
     char *tempDataFileName;
     double x,y;
     int i;
-    tempDataFileName = "plot";
+    tempDataFileName = "EigenValues";
     gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
     if (gnuplotPipe) {
         fprintf(gnuplotPipe,"set title \"Eigen values\"\n",tempDataFileName);
-        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
+//        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
         fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
         fflush(gnuplotPipe);
         tempDataFile = fopen(tempDataFileName,"w");
@@ -131,6 +133,91 @@ void plotxy(double* xData, double* yData, int dataSize) {
     }
 }
 
+void plotdistance1(double* xData, double* yData, int dataSize) {
+    FILE *gnuplotPipe,*tempDataFile;
+    char *tempDataFileName;
+    double x,y;
+    int i;
+    tempDataFileName = "Distance";
+    gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
+    if (gnuplotPipe) {
+        fprintf(gnuplotPipe,"set title \"Distance\"\n",tempDataFileName);
+        //        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
+        fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
+        fflush(gnuplotPipe);
+        tempDataFile = fopen(tempDataFileName,"w");
+        for (i=0; i <= dataSize; i++) {
+            x = xData[i];
+            y = yData[i];
+            fprintf(tempDataFile,"%lf %lf\n",x,y);
+        }
+        fclose(tempDataFile);
+        printf("press enter to continue...");
+        getchar();
+        remove(tempDataFileName);
+        fprintf(gnuplotPipe,"exit \n");
+    } else {
+        printf("gnuplot not found...");
+    }
+}
+
+void plotdistance(Mat &data) {
+    FILE *gnuplotPipe,*tempDataFile;
+    char *tempDataFileName;
+    double x,y;
+    int i;
+    tempDataFileName = "Distance";
+    gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
+    if (gnuplotPipe) {
+//        fprintf(gnuplotPipe,"set multiplot\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set title \"Distance\"\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set yrange [0:2000]\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 1   lc rgb '#FF0000'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 2   lc rgb '#FF8000'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 3   lc rgb '#FFFF00'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 4   lc rgb '#80FF00'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 5   lc rgb '#0000FF'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 6   lc rgb '#7AFFFF'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 7   lc rgb '#FF00FF'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 8   lc rgb '#8000FF'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 9   lc rgb '#8A5C2E'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set style line 10   lc rgb '#00000'\n",tempDataFileName);
+        fprintf(gnuplotPipe,"plot \"%s\" using 1:2 with lines t \'image1\' ls 1, \"%s\" using 1:3 with lines t \'image2\' ls 2,\"%s\" using 1:4 with lines t \'image3\' ls 3, \"%s\" using 1:5 with lines t \'image4\' ls 4, \"%s\" using 1:6 with lines t \'image5\' ls 5, \"%s\" using 1:7 with lines t \'image6\' ls 6, \"%s\" using 1:8 with lines t \'image7\' ls 7, \"%s\" using 1:9 with lines t \'image8\' ls 8, \"%s\" using 1:10 with lines t \'image9\' ls 9,\"%s\" using 1:11 with lines t \'image10\' ls 10\n", tempDataFileName,tempDataFileName, tempDataFileName,tempDataFileName, tempDataFileName,tempDataFileName, tempDataFileName,tempDataFileName, tempDataFileName,tempDataFileName);
+        fflush(gnuplotPipe);
+        tempDataFile = fopen(tempDataFileName,"w");
+        double y1;
+        double y2;
+        double y3;
+        double y4;
+        double y5;
+        double y6;
+        double y7;
+        double y8;
+        double y9;
+        double y10;
+        for (i=0; i < data.cols; i++) {
+            x = i+1;
+            y1 = data.at<double>(0,i);
+            y2 = data.at<double>(1,i);
+            y3 = data.at<double>(2,i);
+            y4 = data.at<double>(3,i);
+            y5 = data.at<double>(4,i);
+            y6 = data.at<double>(5,i);
+            y7 = data.at<double>(6,i);
+            y8 = data.at<double>(7,i);
+            y9 = data.at<double>(8,i);
+            y10 = data.at<double>(9,i);
+            fprintf(tempDataFile,"%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",x,y1,y2,y3,y4,y5,y6,y7,y8,y9,y10);
+        }
+        fclose(tempDataFile);
+        printf("press enter to continue...");
+        getchar();
+        remove(tempDataFileName);
+        fprintf(gnuplotPipe,"exit \n");
+    } else {
+        printf("gnuplot not found...");
+    }
+}
 
 void process_training_images(void){
     // read images and save to the matrix as one array
@@ -166,8 +253,7 @@ void process_training_images(void){
     }
     
     //compute Covariance matrix, eigenvalue and eigen factors
-    Mat eValuesMat;
-    Mat eVectorsMat;
+
     Xtraincenter.convertTo(Xtrain, CV_64F);
     Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
     
@@ -192,7 +278,7 @@ void process_training_images(void){
 //            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
 //        }
 //    }
-//    plotxy(idx, y, indice.rows*indice.cols);
+//    ploteigenvalues(idx, y, indice.rows*indice.cols);
     
     // determine the smallest eigen values
     double sum = cv::sum(eValuesMat)[0];
@@ -261,7 +347,6 @@ void process_test_images(void){
     for (int i = 0; i < (int)ten.size(); i++) {
         sprintf(filename, "train/face%05d.pgm",ten[i]);
         image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
-//        cout << "i " << i << endl;
         for (int k = 0; k < image_height; k++) {
             for (int j = 0; j < image_width; j++){
                 column = (int)(j+image_width*k);
@@ -285,27 +370,32 @@ void process_test_images(void){
     for (int i = 0; i < num_test_files; i++) {
         test_images.push_back(Xtestcenter.row(test_images_idx.at(i)));
     }
-//    cout << "test images " << Xtrain.rows << " " << Xtrain.cols << endl;
-    vector<Mat> distance_test_images;
     
     Xtrain.convertTo(Xtrain, CV_8U);
+    
+    Mat matdist;
+    vector<double> temp;
     for (int i = 0; i < num_test_files; i++) {
-        Mat temp;
-        Mat mattemp;
+        
         for (int j = 0; j < Xtrain.rows; j++) {
-            temp = (test_images.row(i) - Xtrain.row(j));
-            mattemp.push_back(temp.row(0));
+            double dist = norm(test_images.row(i) , Xtrain.row(j));
+            temp.push_back(dist);
         }
-        distance_test_images.push_back(temp);
+        Mat tempmat = Mat(temp).reshape(1,1);
+        temp.clear();
+        matdist.push_back(tempmat.row(0));
     }
     
     // sort distance
     Mat sorted_dist;
-    for (int i = 0; i < num_test_files; i++) {
-        cv::sort(distance_test_images.at(i), sorted_dist, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the distance
-        distance_test_images.at(i) = sorted_dist;
+    cv::sort(matdist, sorted_dist, CV_SORT_EVERY_ROW + CV_SORT_DESCENDING);//sort the distance
 
-    }
+//    plotdistance(sorted_dist);
+    
+    //project data
+    cout << "evec " << eVectorsMat.rows << " " << eVectorsMat.cols << endl;
+
+    
     
 }
 
@@ -314,6 +404,6 @@ int main( int argc, char** argv ) {
     readDir();
     classify_images();
     process_training_images();
-//    process_test_images();
+    process_test_images();
     return 0;
 }
