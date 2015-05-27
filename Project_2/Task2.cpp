@@ -149,8 +149,8 @@ void process_training_images(void){
     //compute Covariance matrix, eigenvalue and eigen factors
     Mat eValuesMat;
     Mat eVectorsMat;
-    Xtrain.convertTo(Xtrain, CV_64F);
-    Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
+    Xtraincenter.convertTo(Xtraincenter, CV_64F);
+    Mat C = Xtraincenter.t() * Xtraincenter / 1000;// (int)ninety.size();
     
     eigen(C, eValuesMat, eVectorsMat);
     cout << eValuesMat.t() << endl;
@@ -162,10 +162,25 @@ void process_training_images(void){
     cv::sort(eValuesMat, eValuesMat, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the eigenvalue
     cout << "indices " << indice.t() << endl;
     
+    // plot spectrum of eigen values
+    double idx[indice.rows*indice.cols];
+    double y[indice.rows*indice.cols];
+    cout << indice.rows << " " <<indice.cols <<endl;
+    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
+    for (int i = 0; i < indice.rows; i++) {
+        for (int j = 0; j < indice.cols; j++) {
+            idx[i*indice.cols+j] = indice.at<int>(j,i);
+            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
+        }
+    }
+    plotxy(idx, y, indice.rows*indice.cols);
+    
+    // determine the smallest eigen values
     double sum = cv::sum(eValuesMat)[0];
     cout << "sum " << sum << endl;
     double temp = 0;
     int index = 0;
+
     for (int i= 0; i < 361; i++){
         temp = temp + eValuesMat.at<double>(i,0);
         cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
@@ -191,24 +206,24 @@ void process_training_images(void){
         imeigenvector.push_back(temp_img);
     }
     
-    for (int i = 0; i < imeigenvector.size(); i++) {
-         namedWindow( "i", WINDOW_NORMAL );
-        imshow("i", imeigenvector.at(i));
-        waitKey();
-    }
+    Mat images;
+    int rows_im = (int)sqrt(imeigenvector.size());
+    Mat H = Mat::zeros(image_height, image_width, CV_32S);
+    Mat V = Mat::zeros(image_height, image_width*(rows_im+1), CV_32S);
     
-    // plot eigen values
-    double idx[indice.rows*indice.cols];
-    double y[indice.rows*indice.cols];
-    cout << indice.rows << " " <<indice.cols <<endl;
-    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
-    for (int i = 0; i < indice.rows; i++) {
-        for (int j = 0; j < indice.cols; j++) {
-            idx[i*indice.cols+j] = indice.at<int>(j,i);
-            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
+
+    for (int i = 0; i < rows_im; i++) {
+        for (int j = 0; j < rows_im; j++) {
+            hconcat(imeigenvector.at(i*rows_im+j), H, H);
         }
+        vconcat(H, V, V);
+        H = Mat::zeros(image_height, image_width, CV_32S);
     }
-    plotxy(idx, y, indice.rows*indice.cols);
+    namedWindow( "Eigen vectors", WINDOW_NORMAL );
+    imshow("Eigen vectors", V);
+    waitKey();
+    
+  
 }
 
 void process_test_images(void){
@@ -252,6 +267,6 @@ int main( int argc, char** argv ) {
     readDir();
     classify_images();
     process_training_images();
-    process_test_images();
+//    process_test_images();
     return 0;
 }
