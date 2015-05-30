@@ -28,7 +28,7 @@ char filename[20];
 Mat row_mean;
 Mat eValuesMat;
 Mat eVectorsMat;
-
+int k_num = 0;
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
     // Create and return normalized image:
@@ -114,7 +114,7 @@ void ploteigenvalues(double* xData, double* yData, int dataSize) {
     gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
     if (gnuplotPipe) {
         fprintf(gnuplotPipe,"set title \"Eigen values\"\n",tempDataFileName);
-//        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
+        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
         fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
         fflush(gnuplotPipe);
         tempDataFile = fopen(tempDataFileName,"w");
@@ -142,7 +142,6 @@ void plotdistance1(double* xData, double* yData, int dataSize) {
     gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
     if (gnuplotPipe) {
         fprintf(gnuplotPipe,"set title \"Distance\"\n",tempDataFileName);
-        //        fprintf(gnuplotPipe,"set yrange [0:20000]\n",tempDataFileName);
         fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
         fflush(gnuplotPipe);
         tempDataFile = fopen(tempDataFileName,"w");
@@ -230,6 +229,8 @@ void process_training_images(void){
         sprintf(filename, "train/face%05d.pgm",ninety[i]);
         image_temp = imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
 
+        image_height = image_temp.rows;
+        image_width = image_temp.cols;
         for (int k = 0; k < image_height; k++) {
             for (int j = 0; j < image_width; j++){
                 column = (int)(j+image_width*k);
@@ -258,48 +259,50 @@ void process_training_images(void){
     Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
     
     eigen(C, eValuesMat, eVectorsMat);
-    cout << eValuesMat.t() << endl;
+//    cout << eValuesMat.t() << endl;
 
     //sort the eigen values in descending order
     Mat indice;
     Mat sortedeValues;
     cv::sortIdx(eValuesMat, indice, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//get the sorted value indices
     cv::sort(eValuesMat, eValuesMat, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the eigenvalue
-    cout << "indices " << indice.t() << endl;
+//    cout << "indices " << indice.t() << endl;
     
-//    // plot spectrum of eigen values
-//    double idx[indice.rows*indice.cols];
-//    double y[indice.rows*indice.cols];
+    // plot spectrum of eigen values
+    double idx[indice.rows*indice.cols];
+    double y[indice.rows*indice.cols];
 //    cout << indice.rows << " " <<indice.cols <<endl;
 //    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
-//    for (int i = 0; i < indice.rows; i++) {
-//        for (int j = 0; j < indice.cols; j++) {
-//            idx[i*indice.cols+j] = indice.at<int>(j,i);
-//            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
-//        }
-//    }
-//    ploteigenvalues(idx, y, indice.rows*indice.cols);
+    for (int i = 0; i < indice.rows; i++) {
+        for (int j = 0; j < indice.cols; j++) {
+            idx[i*indice.cols+j] = indice.at<int>(j,i);
+            y[i*indice.cols+j] = eValuesMat.at<double>(j,i);
+        }
+    }
+    
+    ploteigenvalues(idx, y, indice.rows*indice.cols);
     
     // determine the smallest eigen values
     double sum = cv::sum(eValuesMat)[0];
-    cout << "sum " << sum << endl;
+//    cout << "sum " << sum << endl;
     double temp = 0;
     int index = 0;
 
     for (int i= 0; i < 361; i++){
         temp = temp + eValuesMat.at<double>(i,0);
-        cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
+//        cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
         if (temp >= 0.99*sum)  break;
         //Here I got a super big eigen value on the first place so it break in the first round
         //so I changed it from 0.9 to 0.99
         else index++;
     }
     
-    cout << "index = " << index << endl;
+//    cout << "index = " << index << endl;
+    k_num = index; // number of ks
     
     // visualize eigen vectors
     vector<Mat> imeigenvector;
-    for (int i = 0; i < index; i++) {
+    for (int i = 0; i < k_num; i++) {
         Mat ev = eVectorsMat.row(i).clone();
         Mat temp_img = norm_0_255(ev.reshape(1, image_height));
         temp_img = temp_img.t();
@@ -320,7 +323,7 @@ void process_training_images(void){
     }
     namedWindow( "Eigen vectors", WINDOW_NORMAL );
     imshow("Eigen vectors", V);
-    waitKey();
+//    waitKey();
     
   
 }
@@ -328,13 +331,13 @@ void process_training_images(void){
 void process_test_images(void){
     random_device rd;       // ranom device
     mt19937 gen(rd());      // random generator
-    int num_test_files = 10;
+    int num_test_images = 10;
     vector<int> test_images_idx;
     
     int ten_percent = (int)(0.1 * num_files);           // 10% number of files
     
     uniform_int_distribution<> distribution(1,ten_percent);     // generate uniform distribution
-    for (int i = 0; i < num_test_files; i++) {
+    for (int i = 0; i < num_test_images; i++) {
         int random = distribution(gen);
         test_images_idx.push_back(random);
     }
@@ -367,18 +370,18 @@ void process_test_images(void){
     
     // get 10 test images
     Mat test_images;
-    for (int i = 0; i < num_test_files; i++) {
+    for (int i = 0; i < num_test_images; i++) {
         test_images.push_back(Xtestcenter.row(test_images_idx.at(i)));
     }
-    
-    Xtrain.convertTo(Xtrain, CV_8U);
+    Mat Xtrainint;
+    Xtrain.convertTo(Xtrainint, CV_8U);
     
     Mat matdist;
     vector<double> temp;
-    for (int i = 0; i < num_test_files; i++) {
+    for (int i = 0; i < num_test_images; i++) {
         
-        for (int j = 0; j < Xtrain.rows; j++) {
-            double dist = norm(test_images.row(i) , Xtrain.row(j));
+        for (int j = 0; j < Xtrainint.rows; j++) {
+            double dist = norm(test_images.row(i) , Xtrainint.row(j));
             temp.push_back(dist);
         }
         Mat tempmat = Mat(temp).reshape(1,1);
@@ -390,12 +393,59 @@ void process_test_images(void){
     Mat sorted_dist;
     cv::sort(matdist, sorted_dist, CV_SORT_EVERY_ROW + CV_SORT_DESCENDING);//sort the distance
 
-//    plotdistance(sorted_dist);
+    plotdistance(sorted_dist);
     
-    //project data
-    cout << "evec " << eVectorsMat.rows << " " << eVectorsMat.cols << endl;
+    // k eigen vectors
+    Mat kEigenVectors = eVectorsMat.rowRange(0, k_num-1);
+    
+    //projected train
+    Mat projectedTrain = kEigenVectors * Xtrain.t();
+    //projected ten images
+    test_images.convertTo(test_images, CV_64F);
+    Mat projectedTenIm = kEigenVectors * test_images.t();
+    
+    //10 images distance with lower dimensional space
+    projectedTenIm.convertTo(projectedTenIm, CV_8U);
+    projectedTrain.convertTo(projectedTrain, CV_8U);
+    projectedTenIm = projectedTenIm.t();
+    projectedTrain = projectedTrain.t();
+    Mat matdist_k;
+    vector<double> temp_k;
+    for (int i = 0; i < num_test_images; i++) {
+        
+        for (int j = 0; j < projectedTrain.rows; j++) {
+            double dist = norm(projectedTenIm.row(i) , projectedTrain.row(j));
+            temp.push_back(dist);
+        }
+        Mat tempmat = Mat(temp).reshape(1,1);
+        temp.clear();
+        matdist_k.push_back(tempmat.row(0));
+    }
+    
+    // sort distance
+    Mat sorted_dist_k;
+    cv::sort(matdist_k, sorted_dist_k, CV_SORT_EVERY_ROW + CV_SORT_DESCENDING);//sort the distance
+//    cout << "matdis " << matdist.rows << " " << matdist.cols << endl;
+//    cout << "matdisk " << matdist_k.rows << " " << matdist_k.cols << endl;
+    plotdistance(sorted_dist_k);
+    
+    //nearest neighbor
+    vector<Point> lowDim;
+    vector<Point> normalDim;
+    for (int i = 0; i < num_test_images; i++) {
+        Point minLoc, nul;
+        minMaxLoc(matdist.row(i), NULL, NULL, &minLoc, NULL);
+        lowDim.push_back(minLoc);
+        minMaxLoc(matdist.row(i), NULL, NULL, &minLoc, NULL);
+        normalDim.push_back(minLoc);
+    }
+    
+    cout << "LowerDim" << " " << "NormalDim" << endl;
+    for (int i = 0; i < num_test_images; i++) {
+        cout << lowDim[i].x << " " <<normalDim[i].x << endl;
+    }
+    waitKey();
 
-    
     
 }
 
