@@ -28,9 +28,10 @@ char filename[20];
 Mat row_mean;
 Mat eValuesMat;
 Mat eVectorsMat;
-int k_num = 0;
-double k_threshold = 0.95;
+int k_num = 0;  // k index
+double k_threshold = 0.95;  // threshold of k index
 
+// This function will normalize value into 0 to 255
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
     // Create and return normalized image:
@@ -49,7 +50,8 @@ static Mat norm_0_255(InputArray _src) {
     return dst;
 }
 
-int readDir(void){ // initialization
+// This function will count number of files in the directory
+int readDir(void){
     DIR *dir;
     struct dirent *ent;
     if ((dir = opendir ("train")) != NULL) {
@@ -72,6 +74,9 @@ int readDir(void){ // initialization
     }
 }
 
+// This function is used to classify randomly 90% and 10% of images in directory
+// the index of 90% images will be stored in vector<int> ninety
+// the index of 10% images will be stored in vector<int> ten
 void classify_images(void){
 // classify the index of data, classified indices are stored in ninety and ten vector of int
     random_device rd;       // random device
@@ -107,6 +112,7 @@ void classify_images(void){
     }
 }
 
+// This function is used to plot eigenvalues using GNUPLOT
 void ploteigenvalues(double* xData, double* yData, int dataSize) {
     FILE *gnuplotPipe,*tempDataFile;
     char *tempDataFileName;
@@ -135,42 +141,15 @@ void ploteigenvalues(double* xData, double* yData, int dataSize) {
     }
 }
 
-void plotdistance1(double* xData, double* yData, int dataSize) {
-    FILE *gnuplotPipe,*tempDataFile;
-    char *tempDataFileName;
-    double x,y;
-    int i;
-    tempDataFileName = "Distance";
-    gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
-    if (gnuplotPipe) {
-        fprintf(gnuplotPipe,"set title \"Distance\"\n",tempDataFileName);
-        fprintf(gnuplotPipe,"plot \"%s\" with points\n",tempDataFileName);
-        fflush(gnuplotPipe);
-        tempDataFile = fopen(tempDataFileName,"w");
-        for (i=0; i <= dataSize; i++) {
-            x = xData[i];
-            y = yData[i];
-            fprintf(tempDataFile,"%lf %lf\n",x,y);
-        }
-        fclose(tempDataFile);
-        printf("press enter to continue...");
-        getchar();
-        remove(tempDataFileName);
-        fprintf(gnuplotPipe,"exit \n");
-    } else {
-        printf("gnuplot not found...");
-    }
-}
-
+// This function is used to plot distance stored in Matrix data using GNUPLOT
 void plotdistance(Mat &data) {
     FILE *gnuplotPipe,*tempDataFile;
     char *tempDataFileName;
-    double x,y;
+    double x;
     int i;
     tempDataFileName = "Distance";
     gnuplotPipe = popen("/opt/local/bin/gnuplot","w");
     if (gnuplotPipe) {
-//        fprintf(gnuplotPipe,"set multiplot\n",tempDataFileName);
         fprintf(gnuplotPipe,"set title \"Distance\"\n",tempDataFileName);
         fprintf(gnuplotPipe,"set yrange [0:2000]\n",tempDataFileName);
         fprintf(gnuplotPipe,"set style line 1   lc rgb '#FF0000'\n",tempDataFileName);
@@ -220,6 +199,16 @@ void plotdistance(Mat &data) {
     }
 }
 
+// Process the training images
+// read images
+// store to matrix as one dimensional array
+// get mean matrix
+// centerize matrix
+// compute covariance, eigenvalues, and eigenvectors
+// sort eigenvalues in descending order
+// plot eigenvalues spectrum
+// get k number of index as subspace index
+// visualize eigenvectors
 void process_training_images(void){
     // read images and save to the matrix as one array
     Xtrain = Mat::zeros((int)ninety.size(),(image_width*image_height),CV_8U);
@@ -256,25 +245,20 @@ void process_training_images(void){
     }
     
     //compute Covariance matrix, eigenvalue and eigen factors
-
     Xtraincenter.convertTo(Xtrain, CV_64F);
     Mat C = Xtrain.t() * Xtrain / 1000;// (int)ninety.size();
     
     eigen(C, eValuesMat, eVectorsMat);
-//    cout << eValuesMat.t() << endl;
 
     //sort the eigen values in descending order
     Mat indice;
     Mat sortedeValues;
     cv::sortIdx(eValuesMat, indice, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//get the sorted value indices
     cv::sort(eValuesMat, eValuesMat, CV_SORT_EVERY_COLUMN + CV_SORT_DESCENDING);//sort the eigenvalue
-//    cout << "indices " << indice.t() << endl;
     
     // plot spectrum of eigen values
     double idx[indice.rows*indice.cols];
     double y[indice.rows*indice.cols];
-//    cout << indice.rows << " " <<indice.cols <<endl;
-//    cout << eValuesMat.rows << " " <<eValuesMat.cols <<endl;
     for (int i = 0; i < indice.rows; i++) {
         for (int j = 0; j < indice.cols; j++) {
             idx[i*indice.cols+j] = indice.at<int>(j,i);
@@ -286,16 +270,12 @@ void process_training_images(void){
     
     // determine the smallest eigen values
     double sum = cv::sum(eValuesMat)[0];
-//    cout << "sum " << sum << endl;
     double temp = 0;
     int index = 0;
 
     for (int i= 0; i < 361; i++){
         temp = temp + eValuesMat.at<double>(i,0);
-//        cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
         if (temp >= k_threshold*sum)  break;
-        //Here I got a super big eigen value on the first place so it break in the first round
-        //so I changed it from 0.9 to 0.99
         else index++;
     }
     
@@ -317,7 +297,7 @@ void process_training_images(void){
     int rows_rest = (int)(imeigenvector.size()) - ind_rows_end;//(int)(pow(rows_im, 2));
     Mat H = Mat::zeros(image_height, image_width, CV_8U);
     Mat V = Mat::zeros(image_height, image_width*(rows_im+1), CV_8U);
-    cout << ind_rows_end << " " << rows_rest << endl;
+    
     for (int i = 0; i < rows_im; i++) {
         for (int j = 0; j < rows_im; j++) {
             hconcat(imeigenvector.at(i*rows_im+j), H, H);
@@ -340,11 +320,17 @@ void process_training_images(void){
 
     namedWindow( "Eigen vectors", WINDOW_NORMAL );
     imshow("Eigen vectors", V);
-//    waitKey();
-    
-  
 }
 
+// read test images (10% images data)
+// centerize test images with mean from training images
+// randomly select 10 images
+// calculate euclidean distance between training images and 10 test images
+// sort the distances and plot
+// get k eigenvectors
+// project training data and 10 test images
+// calculate euclidean distance between projected training images and projected 10 test images and plot the distances
+// compare nearest neighbor between lower dimension and normal dimension of train images and 10 test images
 void process_test_images(void){
     random_device rd;       // ranom device
     mt19937 gen(rd());      // random generator
@@ -393,6 +379,7 @@ void process_test_images(void){
     Mat Xtrainint;
     Xtrain.convertTo(Xtrainint, CV_8U);
     
+    // calculate euclidean distance between training images and 10 test images
     Mat matdist;
     vector<double> temp;
     for (int i = 0; i < num_test_images; i++) {
@@ -442,8 +429,6 @@ void process_test_images(void){
     // sort distance
     Mat sorted_dist_k;
     cv::sort(matdist_k, sorted_dist_k, CV_SORT_EVERY_ROW + CV_SORT_DESCENDING);//sort the distance
-//    cout << "matdis " << matdist.rows << " " << matdist.cols << endl;
-//    cout << "matdisk " << matdist_k.rows << " " << matdist_k.cols << endl;
     plotdistance(sorted_dist_k);
     
     //nearest neighbor
@@ -461,12 +446,6 @@ void process_test_images(void){
     for (int i = 0; i < num_test_images; i++) {
         cout << lowDim[i].x << " " <<normalDim[i].x << endl;
     }
-    
-//    cout << matdist << endl << endl;
-    
-//    cout << matdist_k << endl;
-    waitKey();
-
     
 }
 
