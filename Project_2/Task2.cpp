@@ -29,6 +29,8 @@ Mat row_mean;
 Mat eValuesMat;
 Mat eVectorsMat;
 int k_num = 0;
+double k_threshold = 0.95;
+
 static Mat norm_0_255(InputArray _src) {
     Mat src = _src.getMat();
     // Create and return normalized image:
@@ -291,13 +293,13 @@ void process_training_images(void){
     for (int i= 0; i < 361; i++){
         temp = temp + eValuesMat.at<double>(i,0);
 //        cout << "t/s " << temp << " " << sum << " " << temp/sum << endl;
-        if (temp >= 0.99*sum)  break;
+        if (temp >= k_threshold*sum)  break;
         //Here I got a super big eigen value on the first place so it break in the first round
         //so I changed it from 0.9 to 0.99
         else index++;
     }
     
-//    cout << "index = " << index << endl;
+    cout << "index = " << index << endl;
     k_num = index; // number of ks
     
     // visualize eigen vectors
@@ -311,9 +313,11 @@ void process_training_images(void){
     
     Mat images;
     int rows_im = (int)sqrt(imeigenvector.size());
+    int ind_rows_end = (int)(pow(rows_im, 2));
+    int rows_rest = (int)(imeigenvector.size()) - ind_rows_end;//(int)(pow(rows_im, 2));
     Mat H = Mat::zeros(image_height, image_width, CV_8U);
     Mat V = Mat::zeros(image_height, image_width*(rows_im+1), CV_8U);
-    
+    cout << ind_rows_end << " " << rows_rest << endl;
     for (int i = 0; i < rows_im; i++) {
         for (int j = 0; j < rows_im; j++) {
             hconcat(imeigenvector.at(i*rows_im+j), H, H);
@@ -321,6 +325,19 @@ void process_training_images(void){
         vconcat(H, V, V);
         H = Mat::zeros(image_height, image_width, CV_8U);
     }
+    if (rows_rest!=0) {
+        for (int i = 0; i < rows_im-rows_rest; i++) {
+            hconcat(H, H, H);
+        }
+
+        for (int i = 0; i < rows_rest; i++) {
+            hconcat(imeigenvector.at(ind_rows_end+i), H, H);
+        }
+        H = H.colRange(0, V.cols);
+        
+        vconcat(H, V, V);
+    }
+
     namedWindow( "Eigen vectors", WINDOW_NORMAL );
     imshow("Eigen vectors", V);
 //    waitKey();
@@ -444,6 +461,10 @@ void process_test_images(void){
     for (int i = 0; i < num_test_images; i++) {
         cout << lowDim[i].x << " " <<normalDim[i].x << endl;
     }
+    
+//    cout << matdist << endl << endl;
+    
+//    cout << matdist_k << endl;
     waitKey();
 
     
